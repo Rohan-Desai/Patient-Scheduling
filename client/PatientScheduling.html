@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title> Patient Scheduling </title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" type="text/css" href="jsCalendar/jsCalendar.css">
+    <script type="text/javascript" src="jsCalendar/jsCalendar.js"></script>
+  </head>
+  <body>
+
+  <h2> Unscheduled Patients </h2>
+  <table id="patient-table"> 
+    <tr>
+      <th> Patient </th>
+      <th> Number </th>
+      <th> Tentative Meeting Time </th>
+      <th> </th>
+    </tr>
+  </table>
+
+  <h2> Scheduled Patients </h2>
+  <div id="scheduled-patients-notification-area" ></div>
+  <table id="scheduled-patients"> 
+    <tr>
+      <th> Patient </th>
+      <th> Time </th>
+      <th> </th>
+    </tr>
+  </table>
+  <button id="confirm-schedule-button">Confirm Schedule</button>
+
+  <h2> Messaged Patients </h2>
+  <table id="messaged-patients"> 
+    <tr>
+      <th> Patient </th>
+      <th> Time </th>
+      <th> Status </th>
+    </tr>
+  </table>
+
+
+	<script>
+
+    // Helpers 
+
+    class Utilities {
+      static sleep(ms, data) {
+        return new Promise((resolve) => {
+          setTimeout(() => resolve(data), ms);
+        });
+      }
+
+      static showScheduledPatientsNotification(message, ms) {
+          const notificationArea = document.getElementById("scheduled-patients-notification-area");
+          const notification = document.createElement("h3");
+          notification.innerHTML = message;
+          notificationArea.appendChild(notification);
+          setTimeout(() => notificationArea.innerHTML = "", ms);
+      }
+    }
+
+    class DomHelpers {
+      static clearTable(tableEl, retainHeaderRow = true) {
+        while (tableEl.rows.length > (retainHeaderRow ? 1 : 0)) {
+          tableEl.deleteRow(retainHeaderRow ? 1 : 0);
+        }
+      }
+    }
+
+
+    // Models 
+
+    class Patient {
+      constructor(name, number) {
+        this.name = name;
+        this.number = number;
+        this.visitDate = null;
+        this.confirmationStatus = null;
+      }
+
+      isMessaged() {
+        return this.confirmationStatus!=="Undefined";
+      }
+
+      static fromJson(jsonObj) {
+        const patient = new Patient();
+        patient.name = jsonObj.name;
+        patient.number = jsonObj.number;
+        patient.visitDate = jsonObj.visitDate ? new Date(jsonObj.visitDate) : null;
+        patient.confirmationStatus = jsonObj.confirmationStatus;
+        return patient;
+      }
+    }
+
+    const patients = [];
+
+    const models = {
+      "patients": patients,
+    }
+    
+    // Main Code
+    getPatients().then(response => {
+      for (patientData of response) {
+        patients.push(Patient.fromJson(patientData));
+      }
+      console.log(patients);
+      showUnscheduledPatients(patients, elements);
+      showScheduledPatients(patients, elements);
+      showMessagedPatients(patients, elements);
+    });
+
+    // DOM elements
+    const elements = {
+      patientsTable: document.getElementById("patient-table"),
+      scheduledPatientsTable: document.getElementById("scheduled-patients"),
+      messagedPatientsTable: document.getElementById("messaged-patients")
+    }
+
+    
+
+    // Render functions
+
+    function showUnscheduledPatients(patients, elements) {
+      const table = elements.patientsTable;
+
+      DomHelpers.clearTable(table);
+
+      for (const patient of patients.filter(p => !p.visitDate)) {
+        const row = table.insertRow(1);
+
+        const nameCell = row.insertCell(0);
+        nameCell.innerHTML = patient.name;
+
+        const numberCell = row.insertCell(1);
+        numberCell.innerHTML = patient.number;
+
+        const datetimePickerCell = row.insertCell(2);
+        const datetimeInput = document.createElement("input");
+        datetimeInput.type="datetime-local";
+        datetimePickerCell.appendChild(datetimeInput);
+
+        const scheduleButtonCell = row.insertCell(3);
+        scheduleButtonCell.appendChild(createSchedulingButtonFor(patient));
+
+          function createSchedulingButtonFor(patient) {
+            const scheduleButton = document.createElement("button");
+            scheduleButton.innerHTML = "Schedule";
+            scheduleButton.addEventListener("click", () => {
+              if (datetimeInput.value == '') {
+                alert ("Please pick a date and time before scheduling");
+                return;
+              }
+
+              patient.visitDate = new Date(datetimeInput.value);
+              showUnscheduledPatients(patients, elements);
+              showScheduledPatients(patients, elements);
+            });
+            return scheduleButton;
+        }
+      }
+    }
+
+
+    function showScheduledPatients(patients, elements) {
+      const table = elements.scheduledPatientsTable;
+
+      DomHelpers.clearTable(table);
+
+      for (const patient of patients.filter(p => p.visitDate && !p.isMessaged())) {
+        const row = table.insertRow(1); 
+
+        const nameCell = row.insertCell(0);
+        nameCell.innerHTML = patient.name;
+
+        const timeCell = row.insertCell(1);
+        timeCell.innerHTML = patient.visitDate.toLocaleString();
+
+        const removeCell = row.insertCell(2);
+        const removeButton = document.createElement("button");
+        removeButton.innerHTML = "X";
+        removeButton.addEventListener("click", () => {
+          patient.visitDate = null;
+          showUnscheduledPatients(patients, elements);
+          showScheduledPatients(patients, elements);
+        });
+        removeCell.appendChild(removeButton);
+      }
+    }
+
+
+    function showMessagedPatients(patients, elements) {
+      const table = elements.messagedPatientsTable;
+
+      DomHelpers.clearTable(table);
+
+      for (const patient of patients.filter(p => p.isMessaged())) {
+        const row = table.insertRow(1); 
+
+        const patientCell = row.insertCell(0);
+        patientCell.innerHTML = patient.name;
+
+        const timeCell = row.insertCell(1);
+        timeCell.innerHTML = patient.visitDate.toLocaleTimeString();
+
+        const statusCell = row.insertCell(2);
+        statusCell.innerHTML = patient.confirmationStatus;
+       } 
+    }
+
+
+    // Polling Jobs
+    setInterval(() => {
+      updatePatientConfirmationStatuses(patients).then(() => showMessagedPatients(patients, elements));
+      //console.log("Polling messaged patients for confirmation status");
+    }, 4000);
+
+    function updatePatientConfirmationStatuses(patients) {
+      const confirmationStatusPromises = [];
+
+      for (const patient of patients.filter(p => p.isMessaged())) {
+        confirmationStatusPromises.push(getConfirmationStatus({"phoneNumber": patient.number})
+        .then(response => {
+          console.log(response);
+          console.log(response.status);
+          patient.confirmationStatus = response.status;
+        })
+        .catch(err => {
+          if (err.message === "Number Not Found") {
+            alert(`${patient.name} hasn't been messaged yet.`);
+          }
+        }));
+      }
+
+      return Promise.allSettled(confirmationStatusPromises);
+    }
+
+    // Actions
+
+    const confirmScheduleButton = document.getElementById("confirm-schedule-button");
+
+    confirmScheduleButton.addEventListener("click", () => {
+      confirmScheduledPatients(patients);
+    });
+
+    function confirmScheduledPatients(patients) {
+      const sendMessagePromises = [];
+
+      for (const patient of patients.filter(p => p.visitDate && !p.isMessaged())) {
+        const sendMessageRequest = {"patient": patient, message: `A physical therapist would like to see you at ${patient.visitDate.toString()}. Please respond with Y/Yes to confirm or N/No to reject.`};
+
+       sendMessagePromises.push(sendMessage(sendMessageRequest).then(response => {
+          patient.confirmationStatus = "Pending";
+        })
+        .catch(err => {
+          Utilities.showScheduledPatientsNotification("Couldn't message some patients. Please try again.", 5000);
+        })
+       );
+       
+      }
+
+      Promise.allSettled(sendMessagePromises).then(() => {
+        showScheduledPatients(patients, elements);
+        showMessagedPatients(patients, elements);
+      });
+    }
+
+    
+    // API calls
+
+    async function getPatients() {
+      return fetch("http://localhost:3000/getPatients")
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+
+        throw new Error();
+      });
+    }
+
+    async function sendMessage(sendMessageRequest) {
+      return fetch("http://localhost:3000/sendMessage", {
+        method: "POST",
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify(sendMessageRequest)
+      }).then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+
+        throw new Error();
+      });
+    }
+    
+
+    async function getConfirmationStatus(getConfirmationStatusRequest) {
+      return fetch("http://localhost:3000/getConfirmationStatus", {
+        method: "POST",
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify(getConfirmationStatusRequest)
+      }).then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+
+        if (response.status === 404){
+          throw new Error("Number Not Found");
+        }
+
+        throw new Error();
+        
+      });
+    }
+  
+
+  </script>
+  </body>
+</html>

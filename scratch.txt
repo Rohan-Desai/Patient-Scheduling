@@ -1,0 +1,11 @@
+Left off @:
+
+Refactor routes to use real Db
+
+Add a little more color to css.
+
+
+
+Noticed while building;
+
+I had a different definition of the patient object across the client and backend. This means I have to translate

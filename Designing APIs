@@ -1,0 +1,94 @@
+Designing Network APIs
+
+The goal of an API is ease of use for client and reliability
+
+Example:
+
+entity:
+
+Patient {
+	name 
+	number
+}
+
+Actions:
+CRUD?
+
+finalize(patient)
+
+getConfirmationStatus(patient)
+
+
+
+entity vs proceudre oriented api is a better way to think of network apis than 
+REST vs RPC because you can use RPC in an entity oriented way like REST
+
+HTTP supports 4 "methods"
+{GET, POST, PUT, DELETE} these correspond to CRUD operations.
+
+If you want to use HTTP in a restful way, then you rely on these verbs semantically and use nouns in the path
+
+If you want to use HTTP in a RPC way, then you use the HTTP verbs simply for relying on it as a transport and make your URLs verbs
+
+Based on information from 
+[
+https://kennethlange.com/dont-limit-your-rest-api-to-crud-operations/,
+https://tyk.io/blog/rest-never-crud/
+]
+
+At G1 what did we do?
+We had SubscriptionRecord resources with fields such as 
+state: {EXPIRED, ACTIVE, CANCELLED, GRACE_PERIOD}
+billingPlatform: {APPLE, PLAY, etc}
+nextRenewalDate: 
+
+
+the API was 
+Create 
+Get
+List 
+Mutate
+
+We could have had actions such ExpireRecord but instead this was done by having the client set the SubscriptionRecord state field to Expired.
+
+This was a completely CRUD API where setting fields on the SubscriptionRecord triggered side effects
+
+
+I think Entitlement Service was a mix of CRUD + Actions
+
+Create
+List
+RevokeEntitlement
+
+I think this was the case because we didnt want to restrict state transitions for the entitlement
+
+I'm trying to understand a couple points
+1. Is it bad practice to mix CRUD + Actions (RPC)?
+	- No as long as we have some set of understandable entities that both are centered around
+	-- *** This is the key idea that could be extracted from both articles
+
+2. Is it better to pass around entire object models or just the necessary fields of data to the API?
+	- At G1 we usually passed around the entire SubscriptionRecord or Entitlement. Not just a field.
+	- I think in this case, it just depends. If only a field is needed, only a field is needed. For CRUD APIs, it makes sense that you are passing around the entire state.
+
+
+Regardless of CRUD vs action, it is best to keep an API idempotent in case of retries.
+
+
+I think I'm really overthinking this. But this was some nicely structured thinking at least.
+My API does what I need it to for now and this is a small project. The architecture of the appllication and data will be different based on how the project grows. 
+
+Just think Subscription Platform was actually an iteration on a singular API that had many side effects. They didn't know how the project was going to grow and just created a POC that mostly worked.
+
+
+API Types:
+
+REST/HTTP: This means using the HTTP verbs as they are semantically meant to be used. GET, POST, PUT, DELETE. These 4 verbs are the same as CRUD. REST/HTTP naturally exposes a CRUD API. REST and HTTP are meant to deal with "resources".
+
+CRUD: Cread, Read, Update, Delete refers to the common api endpoints for interacting with data entities that have a lifecycle in the application.
+
+
+I think the key point is to use common sense. There are 5 million takes on this stuff on the internet.
+
+
+
